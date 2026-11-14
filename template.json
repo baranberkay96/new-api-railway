@@ -1,0 +1,262 @@
+{
+  "name": "New API v1 LLM Gateway (Postgres + Redis)",
+  "idSeed": "New API v1 LLM Gateway (Postgres + Redis)",
+  "description": "Self-hosted LLM gateway for OpenAI, Claude and Gemini with keys and quotas.",
+  "category": "AI/ML",
+  "tags": [
+    "new-api",
+    "llm",
+    "ai-gateway",
+    "openai-compatible",
+    "claude",
+    "gemini",
+    "api-keys",
+    "quotas",
+    "one-api"
+  ],
+  "image": "https://cdn.jsdelivr.net/gh/QuantumNous/new-api@v1.0.0-rc.51/web/public/logo.png",
+  "upstream": {
+    "repo": "QuantumNous/new-api",
+    "version": "v1.0.0-rc.51",
+    "image": "calciumion/new-api:v1.0.0-rc.51@sha256:d6effcdbc58175494765c0cc5954bdacb2300516eec79ba1a9c61f9b9fae7b49",
+    "checked": "2026-11-14"
+  },
+  "services": {
+    "New API": {
+      "icon": "https://cdn.jsdelivr.net/gh/QuantumNous/new-api@v1.0.0-rc.51/web/public/logo.png",
+      "source": {
+        "repo": "baranberkay96/new-api-railway",
+        "rootDirectory": "/services/new-api"
+      },
+      "startCommand": null,
+      "preDeployCommand": null,
+      "healthcheckPath": "/api/status",
+      "healthcheckTimeout": 900,
+      "restartPolicyType": "ON_FAILURE",
+      "restartPolicyMaxRetries": 10,
+      "numReplicas": 1,
+      "cronSchedule": null,
+      "publicDomain": true,
+      "targetPort": 3000,
+      "tcpProxy": null,
+      "volume": null,
+      "variables": {
+        "PORT": {
+          "defaultValue": "3000",
+          "description": "HTTP port of the API and web console (public domain target).",
+          "required": false
+        },
+        "SQL_DSN": {
+          "defaultValue": "${{Postgres.DATABASE_URL}}",
+          "description": "Postgres for users, tokens, channels, quotas and logs. Tables are migrated on start.",
+          "required": false
+        },
+        "REDIS_CONN_STRING": {
+          "defaultValue": "${{Redis.REDIS_URL}}",
+          "description": "Redis for caches, rate limits and multi-replica sync.",
+          "required": false
+        },
+        "NEW_API_ROOT_USERNAME": {
+          "defaultValue": "root",
+          "description": "Root (admin) login name, 1-12 characters. Used once, on the first start.",
+          "required": false
+        },
+        "NEW_API_ROOT_PASSWORD": {
+          "defaultValue": "${{secret(24, \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\")}}",
+          "description": "Root password (8-128 chars), set on the first start. Generated; read it here.",
+          "required": false
+        },
+        "NEW_API_RESET_ROOT_PASSWORD": {
+          "defaultValue": "false",
+          "description": "true = on the next start, set the root password to NEW_API_ROOT_PASSWORD. Then set back to false.",
+          "required": false
+        },
+        "NEW_API_REGISTER_ENABLED": {
+          "defaultValue": "false",
+          "description": "Self-registration on the first start (false = admins create users). Change later in Settings.",
+          "required": false
+        },
+        "SESSION_SECRET": {
+          "defaultValue": "${{secret(64, \"abcdef0123456789\")}}",
+          "description": "Signs login sessions; keeps users logged in across restarts and replicas.",
+          "required": false
+        },
+        "CRYPTO_SECRET": {
+          "defaultValue": "${{secret(64, \"abcdef0123456789\")}}",
+          "description": "Key for New API's internal HMACs. Keep it stable once the gateway is in use.",
+          "required": false
+        },
+        "SESSION_COOKIE_SECURE": {
+          "defaultValue": "true",
+          "description": "Secure session cookies with an origin check on refresh/logout (HTTPS only).",
+          "required": false
+        },
+        "SESSION_COOKIE_TRUSTED_URL": {
+          "defaultValue": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+          "description": "Allowed https origins for the console, comma-separated. Add custom domains here.",
+          "required": false
+        },
+        "TZ": {
+          "defaultValue": "UTC",
+          "description": "Time zone for logs and daily quota resets.",
+          "required": false
+        },
+        "ERROR_LOG_ENABLED": {
+          "defaultValue": "true",
+          "description": "Record failed relay requests in the usage log.",
+          "required": false
+        },
+        "BATCH_UPDATE_ENABLED": {
+          "defaultValue": "true",
+          "description": "Batch quota and usage writes (fewer database writes under load).",
+          "required": false
+        },
+        "SYNC_FREQUENCY": {
+          "defaultValue": "60",
+          "description": "Seconds between cache syncs from the database (channels, options).",
+          "required": false
+        },
+        "RAILWAY_DEPLOYMENT_DRAINING_SECONDS": {
+          "defaultValue": "130",
+          "description": "Seconds a replaced deployment keeps finishing streaming requests (New API waits up to 120).",
+          "required": false
+        }
+      }
+    },
+    "Postgres": {
+      "icon": "https://devicons.railway.app/i/postgresql.svg",
+      "source": {
+        "image": "ghcr.io/railwayapp-templates/postgres-ssl:18"
+      },
+      "startCommand": null,
+      "preDeployCommand": null,
+      "healthcheckPath": null,
+      "healthcheckTimeout": null,
+      "restartPolicyType": "ON_FAILURE",
+      "restartPolicyMaxRetries": 10,
+      "numReplicas": 1,
+      "cronSchedule": null,
+      "publicDomain": false,
+      "targetPort": null,
+      "tcpProxy": null,
+      "volume": {
+        "mountPath": "/var/lib/postgresql/data"
+      },
+      "variables": {
+        "PGDATA": {
+          "defaultValue": "/var/lib/postgresql/data/pgdata",
+          "description": "Location where the database will be initialized",
+          "required": false
+        },
+        "PGHOST": {
+          "defaultValue": "${{RAILWAY_PRIVATE_DOMAIN}}",
+          "description": "Railway Private Domain Name.",
+          "required": false
+        },
+        "PGPORT": {
+          "defaultValue": "5432",
+          "description": "Port to connect to Postgres.",
+          "required": false
+        },
+        "PGUSER": {
+          "defaultValue": "${{ POSTGRES_USER }}",
+          "description": "Required variable for Data panel",
+          "required": false
+        },
+        "PGDATABASE": {
+          "defaultValue": "${{POSTGRES_DB}}",
+          "description": "Required variable for the data panel.",
+          "required": false
+        },
+        "PGPASSWORD": {
+          "defaultValue": "${{POSTGRES_PASSWORD}}",
+          "description": "Required variable for Data panel",
+          "required": false
+        },
+        "POSTGRES_DB": {
+          "defaultValue": "railway",
+          "description": "Default database created when image is started.",
+          "required": false
+        },
+        "DATABASE_URL": {
+          "defaultValue": "postgresql://${{PGUSER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:5432/${{PGDATABASE}}",
+          "description": "URL to connect to Postgres database.",
+          "required": false
+        },
+        "POSTGRES_USER": {
+          "defaultValue": "postgres",
+          "description": "User to connect to Postgres DB",
+          "required": false
+        },
+        "SSL_CERT_DAYS": {
+          "defaultValue": "820",
+          "description": "SSL certificate expiry in days.",
+          "required": false
+        },
+        "POSTGRES_PASSWORD": {
+          "defaultValue": "${{ secret(32, \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\") }}",
+          "description": "Password to connect to DB",
+          "required": false
+        },
+        "RAILWAY_DEPLOYMENT_DRAINING_SECONDS": {
+          "defaultValue": "60",
+          "description": "Allow Postgres to cleanly shut down",
+          "required": false
+        }
+      }
+    },
+    "Redis": {
+      "icon": "https://cdn.sanity.io/images/sy1jschh/production/0ce0bfdcfbdbf69662b1116671f97c2dd788b655-157x157.svg",
+      "source": {
+        "image": "redis:8.2"
+      },
+      "startCommand": "/bin/sh -c \"rm -rf $RAILWAY_VOLUME_MOUNT_PATH/lost+found/ && exec docker-entrypoint.sh redis-server --requirepass $REDIS_PASSWORD --save 60 1 --dir $RAILWAY_VOLUME_MOUNT_PATH\"",
+      "preDeployCommand": null,
+      "healthcheckPath": null,
+      "healthcheckTimeout": null,
+      "restartPolicyType": "ON_FAILURE",
+      "restartPolicyMaxRetries": 10,
+      "numReplicas": 1,
+      "cronSchedule": null,
+      "publicDomain": false,
+      "targetPort": null,
+      "tcpProxy": null,
+      "volume": {
+        "mountPath": "/data"
+      },
+      "variables": {
+        "REDISHOST": {
+          "defaultValue": "${{RAILWAY_PRIVATE_DOMAIN}}",
+          "description": "Private network hostname of the Redis service, only resolvable from services in the same environment",
+          "required": false
+        },
+        "REDISPORT": {
+          "defaultValue": "6379",
+          "description": "Port that Redis listens on",
+          "required": false
+        },
+        "REDISUSER": {
+          "defaultValue": "default",
+          "description": "Username for authenticating with Redis",
+          "required": false
+        },
+        "REDIS_URL": {
+          "defaultValue": "redis://${{ REDISUSER }}:${{ REDIS_PASSWORD }}@${{ REDISHOST }}:${{ REDISPORT }}",
+          "description": "Connection string for connecting to Redis using the private network",
+          "required": false
+        },
+        "REDISPASSWORD": {
+          "defaultValue": "${{REDIS_PASSWORD}}",
+          "description": "Alias of REDIS_PASSWORD for clients that expect the unseparated name",
+          "required": false
+        },
+        "REDIS_PASSWORD": {
+          "defaultValue": "${{ secret(32, \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\") }}",
+          "description": "Randomly generated password for authenticating with Redis",
+          "required": false
+        }
+      }
+    }
+  },
+  "buckets": []
+}
