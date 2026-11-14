@@ -47,9 +47,11 @@ Self-registration starts **closed** (`NEW_API_REGISTER_ENABLED=false`): the root
 
 **Lost root password:** set `NEW_API_ROOT_PASSWORD` to a new value (8-72 characters), set `NEW_API_RESET_ROOT_PASSWORD=true`, redeploy, log in, then set the reset variable back to `false`.
 
+**Client IPs:** `TRUSTED_PROXIES` includes Railway's edge (`100.64.0.0/10`), so rate limits and logs see real client IPs.
+
 **Custom domain:** add `https://{your-custom-domain}` to `SESSION_COOKIE_TRUSTED_URL` (comma-separated), otherwise logins from that domain are signed out when their session refreshes.
 
-**Resources and plans:** RAM_PLACEHOLDER
+**Resources and plans:** measured on Railway, the stack idles at about 0.2 GB RAM in total (New API 0.04-0.07 GB, Postgres 0.07-0.10 GB, Redis 0.03 GB) and New API peaked at 0.13 GB under a burst of 3,000 authenticated requests. It fits the Free and Trial plans for evaluation; use Hobby or Pro for production, where the Postgres volume holds the growing usage logs. Busy gateways with many concurrent streams need more memory.
 
 **Scaling:** raise replicas on the New API service. Redis and the shared `SESSION_SECRET` keep sessions, caches and settings consistent across replicas. Long streaming responses finish during redeploys (`RAILWAY_DEPLOYMENT_DRAINING_SECONDS`).
 

@@ -34,7 +34,8 @@ Kept from the market: Postgres + Redis topology, `/api/status` healthcheck, `BAT
 8. **Cold-start safe:** waits up to 10 minutes for Postgres (`pg_isready`) and Redis (TCP); New API itself exits if either is missing.
 9. **Deploy-form values never fail the deploy** (STANDARD rule 29): invalid port, username, password, cookie flag or origin list fall back to safe values with a log warning; an unusable root password locks the account with a random password and the log explains the reset.
 10. **No file logs on ephemeral disk** (`--log-dir=`): logs go to Railway's log view; no volume needed for New API.
-11. `TZ=UTC`, `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=130` so streaming responses finish during redeploys (New API waits up to 120 s).
+11. **Real client IPs.** Measured on Railway: requests reach the container from the edge at `100.64.0.x`, a different address per request, which New API's default trusted-proxy list does not cover. Per-IP rate limits (login, console API) therefore keyed on random edge addresses. `TRUSTED_PROXIES` adds `100.64.0.0/10`; after the change the log shows the caller's public IP and the console API limit (360 requests / 3 min per IP) applied to it.
+12. `TZ=UTC`, `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=130` so streaming responses finish during redeploys (New API waits up to 120 s).
 
 ## Pinned versions
 
@@ -90,6 +91,7 @@ Start sequence of `railway-start`:
 | `CRYPTO_SECRET` | `${{secret(64, hex)}}` | Key for New API's internal HMACs. |
 | `SESSION_COOKIE_SECURE` | `true` | Secure cookies + origin check on refresh/logout. |
 | `SESSION_COOKIE_TRUSTED_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | Allowed console origins, comma-separated; the Railway domain is always added. |
+| `TRUSTED_PROXIES` | `100.64.0.0/10,127.0.0.0/8,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7` | Proxies whose `X-Forwarded-For` is trusted; `100.64.0.0/10` is Railway's edge (measured), so rate limits and logs see real client IPs. Empty or invalid falls back to this list. |
 | `TZ` | `UTC` | Time zone. |
 | `ERROR_LOG_ENABLED` | `true` | Log failed relay requests. |
 | `BATCH_UPDATE_ENABLED` | `true` | Batched quota/usage writes. |
@@ -104,12 +106,40 @@ Verbatim from `_railway-base` (as in 09-litellm): `postgres-ssl:18` with volume 
 
 ## Resource estimate
 
-RESOURCES_PLACEHOLDER
+Measured on Railway (test project, 2026-11-14, New API rc.51, per-minute `metrics`):
+
+| Service | Idle RAM | Peak seen | CPU | Volume |
+|---|---|---|---|---|
+| New API | 0.04-0.07 GB | 0.13 GB under load, 0.17 GB during the first-boot / redeploy overlap | < 0.04 vCPU at peak | none |
+| Postgres | 0.07-0.10 GB | 0.10 GB | < 0.04 vCPU | grows with usage logs (not measured over time) |
+| Redis | 0.03 GB | 0.03 GB | < 0.01 vCPU | < 0.1 GB |
+| **Total** | **~0.2 GB** | **~0.3 GB** | | |
+
+Load used: 3,000 requests in 23 s (1,500 token-authenticated `/v1/models`, console API calls, logins). Real provider relays were not measured (no provider key in the test); each in-flight streaming response adds buffers, so busy gateways need more: plan ~0.5 GB for New API at tens of concurrent streams.
+
+- **Idle:** 0.2 GB × $10 + ~0.01 vCPU × $20 + ~0.5 GB volumes × $0.15 ≈ **$2-3/month**.
+- **Typical team gateway:** 0.6 GB × $10 + 0.1 vCPU × $20 + 3 GB × $0.15 ≈ **$8-9/month** (provider charges are billed by the providers).
+- **Plans:** fits Free (0.5 GB per service) and Trial (1 GB per service) for evaluation; **Hobby recommended** for production (5 GB Postgres volume for logs, no sleep). Pro for replicas and larger volumes.
 
 ## Verification checklist
 
-VERIFY_PLACEHOLDER
+Run on the pre-publish test deploy (2026-11-14) and again after publishing:
+
+1. Deploy log: `root account 'root' created; setup completed on loopback`, then `starting New API on port 3000`; healthcheck `/api/status` 200.
+2. `GET /api/setup` → `status: true`; `POST /api/setup` from outside → "The system is already initialized".
+3. `POST /api/user/login` as `root` with `NEW_API_ROOT_PASSWORD` → success; with `123456` → "Username or password is incorrect".
+4. `POST /api/user/register` → "New user registration has been disabled by administrator".
+5. `GET /v1/models` and `POST /v1/chat/completions` without a token or with an invalid token → HTTP 401; with a token created in the console → 200.
+6. Deploy log shows the caller's public IP, not `100.64.0.x`.
+7. Bad form values (`SESSION_COOKIE_SECURE=maybe`, `SESSION_COOKIE_TRUSTED_URL="not a url, http://x"`, `TRUSTED_PROXIES=garbage,999.1.1.1`, `NEW_API_ROOT_USERNAME="has space"`, `NEW_API_WAIT_SECONDS=soon`): deploy SUCCESS with one warning each.
+8. `NEW_API_RESET_ROOT_PASSWORD=true` + new `NEW_API_ROOT_PASSWORD`: log `root password reset for: root`; new password logs in, old one and `123456` do not.
+9. Redeploy New API: `setup already recorded in Postgres`, data and logins persist.
+10. Unit tests: `bash services/new-api/test/railway-start.test.sh` (68 checks: validators, fallbacks, loopback-only setup, locked setup on an invalid password, reset SQL).
 
 ## Open questions
 
-OPEN_PLACEHOLDER
+- **Version label in the name.** Upstream ships `v1.0.0-rc.N` as its "Latest" (non-pre-release) channel; there is no final 1.0.0 yet. The listing says "v1". If that reads as a pre-release label to you, drop it ("New API LLM Gateway (Postgres + Redis)"); `idSeed` keeps the service ids.
+- **Invalid password on the very first boot** (locked root, random password) is covered by the unit tests with a fake binary, not by a fresh Railway deploy; the reset path that recovers from it was verified on Railway.
+- **Relay memory with real providers** was not measured (no provider key used).
+- **Upstream release cadence:** a new RC every few days. Re-pin deliberately after reading the notes; rc.50 crashed on CPUs without AVX, fixed in rc.51.
+- `NEW_API_RESET_ROOT_PASSWORD=true` left on resets the root password to the variable on every start (harmless, but it overrides password changes made in the console).

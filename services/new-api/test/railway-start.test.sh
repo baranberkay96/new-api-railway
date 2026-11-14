@@ -112,7 +112,9 @@ check "valid proxy list kept" equals "$TRUSTED_PROXIES" "100.64.0.0/10,127.0.0.0
 TRUSTED_PROXIES="100.64.0.0/10,999.1.1.1,10.0.0.0/33,railway,fd12::1::2,2001:db8::/48"; sanitize_trusted_proxies
 check "invalid proxies dropped" equals "$TRUSTED_PROXIES" "100.64.0.0/10,2001:db8::/48"
 TRUSTED_PROXIES="garbage"; sanitize_trusted_proxies
-check "no valid proxy falls back to upstream defaults" equals "${TRUSTED_PROXIES:-unset}" unset
+check "no valid proxy falls back to the Railway default list" equals "$TRUSTED_PROXIES" "$DEFAULT_TRUSTED_PROXIES"
+unset TRUSTED_PROXIES; sanitize_trusted_proxies
+check "unset proxies get the Railway default list" equals "$TRUSTED_PROXIES" "$DEFAULT_TRUSTED_PROXIES"
 TRUSTED_PROXIES=" None "; sanitize_trusted_proxies
 check "none kept" equals "$TRUSTED_PROXIES" none
 TRUSTED_PROXIES="none,10.0.0.0/8"; sanitize_trusted_proxies

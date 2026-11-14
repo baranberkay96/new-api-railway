@@ -21,6 +21,9 @@ readonly DEFAULT_PORT=3000
 readonly DEFAULT_ROOT_USERNAME=root
 readonly DEFAULT_WAIT_SECONDS=600
 readonly BOOT_ATTEMPTS=5
+# Railway's edge proxy (100.64.0.0/10) plus New API's own defaults, so client
+# IPs (rate limits, logs) come from X-Forwarded-For instead of the edge.
+readonly DEFAULT_TRUSTED_PROXIES="100.64.0.0/10,127.0.0.0/8,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7"
 NEW_API_BIN=${NEW_API_BIN:-/new-api}
 
 log() { printf '[railway-start] %s\n' "$*" >&2; }
@@ -129,7 +132,7 @@ valid_ipv6_cidr() {
 # (upstream exits on any invalid entry). "none" is kept only on its own.
 sanitize_trusted_proxies() {
   local raw=${TRUSTED_PROXIES:-} item kept=()
-  [[ -z ${raw//[[:space:],]/} ]] && { unset TRUSTED_PROXIES; return; }
+  [[ -z ${raw//[[:space:],]/} ]] && { export TRUSTED_PROXIES=$DEFAULT_TRUSTED_PROXIES; return; }
   if [[ $(lower "${raw//[[:space:]]/}") == none ]]; then
     export TRUSTED_PROXIES=none
     return
@@ -145,8 +148,8 @@ sanitize_trusted_proxies() {
     fi
   done
   if ((${#kept[@]} == 0)); then
-    warn "TRUSTED_PROXIES has no valid entry; using New API's defaults"
-    unset TRUSTED_PROXIES
+    warn "TRUSTED_PROXIES has no valid entry; using ${DEFAULT_TRUSTED_PROXIES}"
+    export TRUSTED_PROXIES=$DEFAULT_TRUSTED_PROXIES
     return
   fi
   local IFS=','
