@@ -105,6 +105,19 @@ check "unknown secure value treated as true" equals "${SESSION_COOKIE_SECURE:-}"
 reset_env; SESSION_SECRET=random_string; sanitize_secrets
 check "placeholder session secret removed" equals "${SESSION_SECRET:-unset}" unset
 
+
+# --- trusted proxies ------------------------------------------------------------
+TRUSTED_PROXIES="100.64.0.0/10, 127.0.0.0/8,::1,10.0.0.0/8,fc00::/7"; sanitize_trusted_proxies
+check "valid proxy list kept" equals "$TRUSTED_PROXIES" "100.64.0.0/10,127.0.0.0/8,::1,10.0.0.0/8,fc00::/7"
+TRUSTED_PROXIES="100.64.0.0/10,999.1.1.1,10.0.0.0/33,railway,fd12::1::2,2001:db8::/48"; sanitize_trusted_proxies
+check "invalid proxies dropped" equals "$TRUSTED_PROXIES" "100.64.0.0/10,2001:db8::/48"
+TRUSTED_PROXIES="garbage"; sanitize_trusted_proxies
+check "no valid proxy falls back to upstream defaults" equals "${TRUSTED_PROXIES:-unset}" unset
+TRUSTED_PROXIES=" None "; sanitize_trusted_proxies
+check "none kept" equals "$TRUSTED_PROXIES" none
+TRUSTED_PROXIES="none,10.0.0.0/8"; sanitize_trusted_proxies
+check "none mixed with entries is dropped" equals "$TRUSTED_PROXIES" "10.0.0.0/8"
+
 # --- root account settings ----------------------------------------------------
 NEW_API_ROOT_USERNAME="has space" NEW_API_ROOT_PASSWORD="short"
 sanitize_root_account

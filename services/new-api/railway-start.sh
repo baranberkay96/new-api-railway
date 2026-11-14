@@ -103,6 +103,56 @@ filter_origins() {
   printf '%s' "${kept[*]+"${kept[*]}"}"
 }
 
+valid_ipv4_cidr() {
+  local addr=${1%%/*} prefix= octet
+  [[ $1 == */* ]] && prefix=${1#*/}
+  [[ $addr =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+  IFS=. read -r -a octets <<<"$addr"
+  for octet in "${octets[@]}"; do ((10#$octet <= 255)) || return 1; done
+  [[ -z $prefix ]] || { [[ $prefix =~ ^[0-9]{1,2}$ ]] && ((10#$prefix <= 32)); }
+}
+
+valid_ipv6_cidr() {
+  local addr=${1%%/*} prefix= rest group groups
+  [[ $1 == */* ]] && prefix=${1#*/}
+  [[ $addr =~ ^[0-9A-Fa-f:]+$ && $addr == *:*:* ]] || return 1
+  rest=${addr//::/}
+  ((${#addr} - ${#rest} <= 2)) || return 1 # at most one "::"
+  [[ $rest != *:::* ]] || return 1
+  IFS=: read -r -a groups <<<"$addr"
+  ((${#groups[@]} <= 8)) || return 1
+  for group in ${groups[@]+"${groups[@]}"}; do ((${#group} <= 4)) || return 1; done
+  [[ -z $prefix ]] || { [[ $prefix =~ ^[0-9]{1,3}$ ]] && ((10#$prefix <= 128)); }
+}
+
+# TRUSTED_PROXIES: drop entries Go's net.ParseIP/ParseCIDR would reject
+# (upstream exits on any invalid entry). "none" is kept only on its own.
+sanitize_trusted_proxies() {
+  local raw=${TRUSTED_PROXIES:-} item kept=()
+  [[ -z ${raw//[[:space:],]/} ]] && { unset TRUSTED_PROXIES; return; }
+  if [[ $(lower "${raw//[[:space:]]/}") == none ]]; then
+    export TRUSTED_PROXIES=none
+    return
+  fi
+  IFS=',' read -ra items <<<"$raw"
+  for item in ${items[@]+"${items[@]}"}; do
+    item=${item//[[:space:]]/}
+    [[ -z $item ]] && continue
+    if valid_ipv4_cidr "$item" || valid_ipv6_cidr "$item"; then
+      kept+=("$item")
+    else
+      warn "TRUSTED_PROXIES: ignoring '$item' (expected an IP address or CIDR)"
+    fi
+  done
+  if ((${#kept[@]} == 0)); then
+    warn "TRUSTED_PROXIES has no valid entry; using New API's defaults"
+    unset TRUSTED_PROXIES
+    return
+  fi
+  local IFS=','
+  export TRUSTED_PROXIES="${kept[*]}"
+}
+
 sanitize_port() {
   if ! valid_port "${PORT:-}"; then
     [[ -n ${PORT:-} ]] && warn "PORT='${PORT}' is not a valid port; using ${DEFAULT_PORT}"
@@ -347,6 +397,7 @@ main() {
   sanitize_port
   sanitize_secrets
   sanitize_cookie_settings
+  sanitize_trusted_proxies
   sanitize_root_account
   sanitize_wait_seconds
   default_node_name
