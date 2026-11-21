@@ -108,24 +108,39 @@ filter_origins() {
 
 valid_ipv4_cidr() {
   local addr=${1%%/*} prefix= octet
-  [[ $1 == */* ]] && prefix=${1#*/}
+  if [[ $1 == */* ]]; then
+    prefix=${1#*/}
+    [[ $prefix =~ ^[0-9]{1,2}$ ]] && ((10#$prefix <= 32)) || return 1
+  fi
   [[ $addr =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
   IFS=. read -r -a octets <<<"$addr"
-  for octet in "${octets[@]}"; do ((10#$octet <= 255)) || return 1; done
-  [[ -z $prefix ]] || { [[ $prefix =~ ^[0-9]{1,2}$ ]] && ((10#$prefix <= 32)); }
+  for octet in "${octets[@]}"; do
+    [[ $octet == 0 || $octet != 0* ]] && ((10#$octet <= 255)) || return 1
+  done
 }
 
 valid_ipv6_cidr() {
-  local addr=${1%%/*} prefix= rest group groups
-  [[ $1 == */* ]] && prefix=${1#*/}
+  local addr=${1%%/*} prefix= rest group groups count=0 compressed=false
+  if [[ $1 == */* ]]; then
+    prefix=${1#*/}
+    [[ $prefix =~ ^[0-9]{1,3}$ ]] && ((10#$prefix <= 128)) || return 1
+  fi
   [[ $addr =~ ^[0-9A-Fa-f:]+$ && $addr == *:*:* ]] || return 1
-  rest=${addr//::/}
-  ((${#addr} - ${#rest} <= 2)) || return 1 # at most one "::"
-  [[ $rest != *:::* ]] || return 1
+  [[ $addr != *:::* ]] || return 1
+  [[ $addr != :* || $addr == ::* ]] || return 1
+  [[ $addr != *: || $addr == *:: ]] || return 1
+  if [[ $addr == *::* ]]; then
+    compressed=true
+    rest=${addr#*::}
+    [[ $rest != *::* ]] || return 1 # at most one "::"
+  fi
   IFS=: read -r -a groups <<<"$addr"
-  ((${#groups[@]} <= 8)) || return 1
-  for group in ${groups[@]+"${groups[@]}"}; do ((${#group} <= 4)) || return 1; done
-  [[ -z $prefix ]] || { [[ $prefix =~ ^[0-9]{1,3}$ ]] && ((10#$prefix <= 128)); }
+  for group in ${groups[@]+"${groups[@]}"}; do
+    ((${#group} <= 4)) || return 1
+    [[ -n $group ]] && count=$((count + 1))
+  done
+  # An uncompressed address has eight groups; "::" replaces at least one.
+  if [[ $compressed == true ]]; then ((count < 8)); else ((count == 8)); fi
 }
 
 # TRUSTED_PROXIES: drop entries Go's net.ParseIP/ParseCIDR would reject

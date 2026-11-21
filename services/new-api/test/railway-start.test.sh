@@ -120,6 +120,24 @@ check "none kept" equals "$TRUSTED_PROXIES" none
 TRUSTED_PROXIES="none,10.0.0.0/8"; sanitize_trusted_proxies
 check "none mixed with entries is dropped" equals "$TRUSTED_PROXIES" "10.0.0.0/8"
 
+for proxy in '01.2.3.4' '1.2.3.4/'; do
+  TRUSTED_PROXIES="100.64.0.0/10,$proxy"; sanitize_trusted_proxies
+  check "malformed IPv4 proxy $proxy is dropped" equals "$TRUSTED_PROXIES" "100.64.0.0/10"
+done
+
+# Go's net.ParseIP rejects incomplete, overfull and malformed compression.
+# Letting any of these reach New API makes its trusted-proxy setup exit.
+for proxy in '1:2:3' '1:2:3:4:5:6:7' '1:::2' ':::1' '1:::' \
+  ':1:2:3:4:5:6:7' '1:2:3:4:5:6:7:' '1:2:3:4:5:6:7:8::' \
+  '::1:2:3:4:5:6:7:8' '::1/'; do
+  TRUSTED_PROXIES="100.64.0.0/10,$proxy"; sanitize_trusted_proxies
+  check "malformed IPv6 proxy $proxy is dropped" equals "$TRUSTED_PROXIES" "100.64.0.0/10"
+done
+TRUSTED_PROXIES='1:2:3'; sanitize_trusted_proxies
+check "only malformed IPv6 falls back to safe defaults" equals "$TRUSTED_PROXIES" "$DEFAULT_TRUSTED_PROXIES"
+TRUSTED_PROXIES='::,::1,fc00::/7,2001:db8::1,1:2:3:4:5:6:7:8,1:2:3:4:5:6:7::'; sanitize_trusted_proxies
+check "valid IPv6 compression and eight groups are preserved" equals "$TRUSTED_PROXIES" '::,::1,fc00::/7,2001:db8::1,1:2:3:4:5:6:7:8,1:2:3:4:5:6:7::'
+
 # --- root account settings ----------------------------------------------------
 NEW_API_ROOT_USERNAME="has space" NEW_API_ROOT_PASSWORD="short"
 sanitize_root_account

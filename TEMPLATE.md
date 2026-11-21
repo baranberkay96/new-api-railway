@@ -134,7 +134,7 @@ Run on the pre-publish test deploy (2026-11-14) and again after publishing:
 7. Bad form values (`SESSION_COOKIE_SECURE=maybe`, `SESSION_COOKIE_TRUSTED_URL="not a url, http://x"`, `TRUSTED_PROXIES=garbage,999.1.1.1`, `NEW_API_ROOT_USERNAME="has space"`, `NEW_API_WAIT_SECONDS=soon`): deploy SUCCESS with one warning each.
 8. `NEW_API_RESET_ROOT_PASSWORD=true` + new `NEW_API_ROOT_PASSWORD`: log `root password reset for: root`; new password logs in, old one and `123456` do not.
 9. Redeploy New API: `setup already recorded in Postgres`, data and logins persist.
-10. Unit tests: `bash services/new-api/test/railway-start.test.sh` (68 checks: validators, fallbacks, loopback-only setup, locked setup on an invalid password, reset SQL).
+10. Unit tests: `bash services/new-api/test/railway-start.test.sh` (82 checks: validators, malformed IPv4/IPv6 proxy fallbacks, loopback-only setup, locked setup on an invalid password, reset SQL).
 
 ## Open questions
 
