@@ -1,6 +1,6 @@
 {
   "name": "New API v1 LLM Gateway (Postgres + Redis)",
-  "idSeed": "New API v1 LLM Gateway (Postgres + Redis)",
+  "idSeed": "New API v1 LLM Gateway (Postgres + Redis) republish 2026-11-21",
   "description": "Self-hosted LLM gateway for OpenAI, Claude and Gemini with keys and quotas.",
   "category": "AI/ML",
   "tags": [
